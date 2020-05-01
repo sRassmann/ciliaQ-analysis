@@ -37,3 +37,15 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+.Rproj.user
+
+
+# Reports
+*.html
+Ciliary Lenght Analysis *_files
+
+# Ouput folder
+output/
+
+# Exclude list
+resources/exclude_list*
