@@ -68,8 +68,6 @@ analysis_dir/   (The folder you downloaded)
 raw data dir/    
 --/<all your ciliaQ data>
 
-somethin 
-
 ## define paths
 Data dir should be a vector of paths to directories containing the data to analyze. The output directory will contain all generated files except this report.
 ```{r,define input paths}
