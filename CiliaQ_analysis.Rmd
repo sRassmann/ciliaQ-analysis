@@ -65,7 +65,7 @@ raw data dir/
 --/<all your ciliaQ data>
 
 ## define paths
-Data dir should be a vector of paths to directories containing the data to analyze. The output directory will contain all generated files exclusive this report.
+Data dir should be a vector of paths to directories containing the data to analyze. The output directory will contain all generated files except this report.
 ```{r,define input paths}
 analysis_dir <-  'path/to/your/analysis dir'  # TODO add path to directory containing the folder with the R analysis 
 raw_data_dir <- 'path/to/your/raw data' # TODO add path to the directory containing your input dat
@@ -105,7 +105,7 @@ ggplot2::theme_set(theme_minimal()
                    + theme(axis.text.x = element_text(angle = 45, hjust = 1), text = element_text(size=10))) # get a nicer ggplot theme
 ```
 
-You can customize the color theme by chaning and adding colors to this list. The colors for each value should be provided as hex codes (e.g. see [here](https://www.w3schools.com/colors/colors_picker.asp)).
+You can customize the color theme by changing and adding colors to this list. The colors for each value should be provided as hex codes (e.g. see [here](https://www.w3schools.com/colors/colors_picker.asp)).
 ```{r,  color customization}
 custom_cols <- list( # TODO set plot colors
   genotype = c('471'     = '#4E84C4',
@@ -145,7 +145,7 @@ files_to_process <- files_to_process[!stringi::stri_detect_regex(files_to_proces
 
 ## create annotation
 
-This chunk extracts the plain name of each image without and ending. This needs to be done to match the extracted annotation with the actual cilia from the tables ( __Note__: Filenames need to be unique!). It also extracts the experiment from the filepaths.  
+This chunk extracts the plain name of each image without an ending. This needs to be done to match the extracted annotation with the actual cilia from the tables ( __Note__: Filenames need to be unique!). It also extracts the experiment from the filepaths.  
 This example assumes that one experiment is located in one parent directory marked by a date and an experiment ID (starting with e and followed by at least 3 digits) in the name and that each filenames contains the imaging date as an 8 digit number starting with 20.   
 ```{r, extract annotation from filenames}
 # TODO modifiy to your needs depending on your naming conventions
@@ -208,7 +208,7 @@ exclude_list <- read.csv2(file.path(analysis_dir, 'resources', 'exclude_list_cil
 
 all_data <- read_data_from_ciliaQ(as.vector(files_annotation$filepath)) %>%  # unannotated dataframe
   filter(!(cilia_ID_unique %in% exclude_list$merged)) %>%  # exclude cilia
-  mutate(cilia_length_um = cilia_length_um + 0.21) # add the size of 1 pixel to each length, to compensate for the settings in CiliaQs skeletonize function 
+  mutate(cilia_length_um = cilia_length_um + 0.21) # add the size of 1 pixel to each length, to compensate for the settings in CiliaQs skeletonize function, TODO Replace the number 0.21 with the length of one pixel in your images
 
 all_data_anno <- merge(all_data, files_annotation, by = 'filename', all.x = T) %>% arrange(cilia_ID_unique) # annotated dataFrame
 rownames(all_data_anno) <- all_data_anno$cilia_ID_unique
@@ -274,7 +274,7 @@ ggpubr::ggarrange(plotlist = plots_volume, ncol = ncol_plot_grid, nrow = nrow_pl
 
 
 ## transfection control
-Assuming that transgenic cells are used and they are marked with the respective colors in channel A and B defined in CiliaQ, we can measure and quantify the expression of the constructs by plotting the intesity in channel A vs channel B. Hence, you can check if the expression can be observed as exspected.
+Assuming that transgenic cells are used and they are marked with the respective colors in channel A and B defined in CiliaQ, we can measure and quantify the expression of the constructs by plotting the intesity in channel A vs channel B. Hence, you can check if the expression can be observed as expected.
 ```{r, fig.height=8, fig.width=7}
 plots_transfection_ctr <- list() # contains the scatter plots for an quick overview
 
@@ -294,7 +294,7 @@ ggpubr::ggarrange(plotlist = plots_transfection_ctr,ncol = ncol_plot_grid, nrow 
 
 # Write output data
 
-After checking the quality of the data it can now be retrieved as .xlsx files so you can open, edit, and plot it using Excel or Prism.  
+After checking the quality of the data it can now be retrieved as .xlsx files so you can open, edit, and plot it using alternative data analysis and visualization software such as Excel or Prism.  
 
 ## output all data
 
@@ -329,7 +329,7 @@ This is just example code for analyzing the data using correlation analysis and 
 
 ## Correlation analysis
 
-By calculating and spotting correlation between the different measurement parameters we might be able to already spot unexspected behaviour and can get an overview over the variance as well as dependencies within the data. This might be intersting in some cases, however, it takes a while to compute, so if you have big datasets you might want to skip this part by deleting or commenting out the code.
+By calculating and testing for correlation between the different measurement parameters we might be able to detect unexpected behaviour and can get an overview over the variance as well as dependencies within the data. This might be intersting in some cases, however, it takes a while to compute, so if you have big datasets you might want to skip this part by deleting or commenting out the code.
 ```{r, multiple regression plot, fig.height=10, fig.width=12}
 variables_in_regre_plots <- c('volume_vox', 'n_surface_vox', 'shape_complex', 'sphere_radius_um','av_int_reconst',
                               'max_int_reconst', 'av_int_reconst_upper_ten_perc',
@@ -379,7 +379,7 @@ pheatmap::pheatmap(cor$r,
 
 ### PCA
 
-We can also perform a PCA on the master dataFrame in order to assess cross-experiment structures.    
+We can also perform a PCA on the master dataFrame in order to assess cross-experiment structures.
 The results of the PCA are stored to a prcomp object and need to be retrieved from it.  
 First we define variables to be considered, as some variables are essantially duplicate as they appear e.g. as pixels and as metric units, others are very noisy.
 ```{r, calc PCA}
@@ -406,12 +406,12 @@ plot_pca_eigenvalues(pca_all)
 
 This plot shows the relative variance explained by each PC.  
 
-Next we can have a look on how much each variable influences each PC. 
+Next we can investigate the influence of each variable to each PC. 
 ```{r, print eigenvalues, class.output="scroll-400"}
 pca_all$rotation[, c(0:4)]
 ```
 
-You can plot the PCA to detect outliers and also get a brief overview over the data. You might already be able to detect some clustering upon your experimental conditions.
+You can plot the PCA to detect outliers and also get a brief overview over the data. You might already be able to detect some clustering by experimental conditions.
 ```{r, batch detection PCA}
 pcs <-  merge(all_data_anno, pca_all$x, by = 0)
 
@@ -487,7 +487,7 @@ tsne_anno %>%
 
 ## cilary length by condition
 
-This is an example on how to analyze the cilary length. You can easily assess other varibles by simpley exchanging the names.
+This is an example on how to analyze the cilary length. You can easily inspect other varibles by simpley exchanging the names.
 
 ```{r, length distr overview, fig.width=8}
 length_distr_plot <- all_data_anno %>% 
@@ -570,5 +570,5 @@ sessionInfo()
 
 save.image(filename_R_image)
 ```
-The R image was saved as ```r filename_R_image``` . Import the image to R if you want to continue to analyze the data in sepate R script or session.
+The R image was saved as ```r filename_R_image``` . Import the image to R for continuing analysis in sepate R scripts or sessions.
 
