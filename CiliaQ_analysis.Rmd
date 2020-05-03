@@ -1,8 +1,9 @@
 ---
 title: 'Join and analyze CiliaQ output data'
 subtitle : 'Template script'
-author: "[Sebastian Rassmann](https://github.com/sRassmann)"
-
+author:
+  name: "[Sebastian Rassmann](https://github.com/sRassmann)"
+  affiliation: "[Biophysical Imaging, III, University Bonn](http://www.iii.uni-bonn.de/en/wachten_lab/)"
 date: "`r format(Sys.time(), '%d/%m/%y - %H:%M:%S')`"
 output:
   html_document: 
@@ -17,6 +18,9 @@ knit: (
       encoding      = encoding, 
       output_file   = 'Ciliary Lenght Analysis 20200503.html') }) # TODO modify the report title each time you run the script to avoid overwriting
 ---
+
+This script has been developed in the department of [Biophysical Imaging](http://www.iii.uni-bonn.de/en/wachten_lab/) at the Institute of Innate Immunity, Bonn, Germany. For information on how to cite this work please contact [Sebastian Rassmann](mailto:s.rassmann@uni-bonn.de).
+
 
 ```{css set css otpions, echo=FALSE}
 .scroll-200 {
@@ -64,6 +68,8 @@ analysis_dir/   (The folder you downloaded)
 raw data dir/    
 --/<all your ciliaQ data>
 
+somethin 
+
 ## define paths
 Data dir should be a vector of paths to directories containing the data to analyze. The output directory will contain all generated files except this report.
 ```{r,define input paths}
@@ -108,12 +114,8 @@ ggplot2::theme_set(theme_minimal()
 You can customize the color theme by changing and adding colors to this list. The colors for each value should be provided as hex codes (e.g. see [here](https://www.w3schools.com/colors/colors_picker.asp)).
 ```{r,  color customization}
 custom_cols <- list( # TODO set plot colors
-  genotype = c('471'     = '#4E84C4',
-               '471 742' = '#293352',
-               '430'     = '#D16103',
-               '448'     = '#FFDB6D',
-               '448 742' = '#C4961A',
-               'WT'      = '#52854C')
+  genotype = c('WT' = '#4E84C4',
+               'KO' = '#293352')
 )
 ```
 
@@ -163,8 +165,8 @@ files_annotation$imaging_date <- stringi::stri_extract_first_regex(str = rowname
 
 Now we're trying to retract the exact experimental conditions from the filenames. In this use-case we're assuming to have different genotypes and treatment vs controls as conditions. A combination of all different varibles is than stored in the column 'condition'.
 ```{r, extract experimental conditions from filename}
-genotypes <- c(' WT ', ' NT ', ' 430 ', ' 471 742 ', ' 471 ', ' 448 742 ', ' 448 ') # TODO enter your genotypes
-treatments <- c(' L ', ' D ', ' 0 ', ' 1 23 ', ' 1_23 ', ' 23 1 ', ' 23_1 ') # TODO enter possible treatments
+genotypes <- c(' WT ', ' NT ', ' KO ') # TODO enter your genotypes
+treatments <- c(' untreated ', ' conc 1 ', ' conc 2 ') # TODO enter possible treatments
 
 files_annotation$genotype <- stringi::stri_extract_first_regex(str = rownames(files_annotation), pattern = convert_vector_to_regex(genotypes)) %>% 
   gsub(pattern = '^ ', replacement = '') %>% # delete spaces before and after the strings

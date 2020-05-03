@@ -8,3 +8,6 @@ __Note:__ You should clone the whole project structure, as it also contains the 
 
 ## Usage
 Before running the script only the paths, names, and experimental conditions need to be modified (marked with the tag '*TODO*'). Hence, you on't need (higher) skills in R programming. All the steps are explained in the markdown parts of the documents.
+
+## Citation
+This script has been developed in the department of [Biophysical Imaging](http://www.iii.uni-bonn.de/en/wachten_lab/) at the Institute of Innate Immunity, Bonn, Germany. For information on how to cite this work please contact [Sebastian Raﬂmann](mailto:s.rassmann@uni-bonn.de).
