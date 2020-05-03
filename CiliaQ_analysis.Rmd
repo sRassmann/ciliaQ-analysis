@@ -1,0 +1,574 @@
+---
+title: 'Join and analyze CiliaQ output data'
+subtitle : 'Template script'
+author: "[Sebastian Rassmann](https://github.com/sRassmann)"
+
+date: "`r format(Sys.time(), '%d/%m/%y - %H:%M:%S')`"
+output:
+  html_document: 
+    toc: true
+    toc_float: true
+    fig_width: 5 
+    fig_height: 5
+knit: (
+  function(inputFile, encoding) { 
+    rmarkdown::render( 
+      input         = inputFile, 
+      encoding      = encoding, 
+      output_file   = 'Ciliary Lenght Analysis 20200503.html') }) # TODO modify the report title each time you run the script to avoid overwriting
+---
+
+```{css set css otpions, echo=FALSE}
+.scroll-200 {
+  max-height: 200px;
+  overflow-y: auto;
+  background-color: inherit;
+}
+.scroll-400 {
+  max-height: 400px;
+  overflow-y: auto;
+  background-color: inherit;
+}
+```
+
+```{r, setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+This markdown bundles the functionality of joining the output data from ciliaQ. 
+The principle is to join the data from all relevant experiments (which are assumed to be bundled in one directory) into one big master dataFrame: This dataFrame can than be used for quality control (e.g. correct naming of experimental settings, calibration, or issues with ciliaQ detection), assessement of the data structure, and, finally, to be subsetted to individual data sets for further processing and in-depth analysis.
+
+__Note:__: I try to stick to the [tidyverse](https://style.tidyverse.org/index.html) and [google](https://google.github.io/styleguide/Rguide.html) naming conventions, I would recommend to stick to it when modifying the script.
+Main features include:
+
+
+* __names of objects and functions in snake case (all lowercase, separate words with underscore, e.g. object_name, do_something() )__
+* usage of <- instead of =
+* explicitly use namespaces, exception: common and unambigious packages such as ggplot2 
+* explict return statements
+* differing from the style codes, I prefer using 'quote' instead of "quote" and to add spaces to the '=' sign in functions calls
+
+The [pipe operator](https://www.datacamp.com/community/tutorials/pipe-r-tutorial) ( %>% ) is just a shorthand notation for nested functions making the code more readable. E.g. a call of ```d <- c(b(a(df)), param = 'x')``` becomes ```d <- df %>% a() %>% b() %>% c(param = 'x')```.
+
+# Preparations
+
+We assume the follwing file structure:
+analysis_dir/   (The folder you downloaded)
+  --/ciliaQ-analysis  
+   ----/CiliaQ Analysis.rmd (this document)   
+   ----/Ciliary Lenght Analysis 'Date'.html (generated report)   
+   ----/output (target for output data such als the image, plots, and xlsx files)   
+   ----/resources   
+   ------/functions_ciliaQ_Analysis.R   
+   ------/exclude_list_ciliaQ_length_analysis.xlsx (list of cilia to exclude based on manual inspection)   
+raw data dir/    
+--/<all your ciliaQ data>
+
+## define paths
+Data dir should be a vector of paths to directories containing the data to analyze. The output directory will contain all generated files exclusive this report.
+```{r,define input paths}
+analysis_dir <-  'path/to/your/analysis dir'  # TODO add path to directory containing the folder with the R analysis 
+raw_data_dir <- 'path/to/your/raw data' # TODO add path to the directory containing your input dat
+
+
+output_dir <- file.path(analysis_dir, 'output')
+date <- gsub(' ', '_', gsub(':', '-', as.character(Sys.time())))
+filename_annotation <- file.path(output_dir, paste('ciliaQ_analysis_annotation_', date, ".xlsx", sep = ''))
+filename_cilia_data <- file.path(output_dir, paste('ciliaQ_analysis_data_', date, ".xlsx", sep = ''))
+filename_R_image <- file.path(output_dir, paste('image_', date, ".R", sep = ''))
+```
+An overview xlsx file containing all annotation such as input filenames, input path, and extracted annotations is saved as *`r filename_annotation`*.
+The raw data extracted from the CiliaQ results is saved as *`r filename_cilia_data`*.  
+The R image for further data access and analysis is saved as *`r filename_R_image`*.  
+
+## import functions
+```{r, import functions, class.output='scroll-400'}
+function_path <-  file.path(analysis_dir, 'resources', 'functions_ciliaQ_Analysis.R') 
+
+source(function_path, echo = T, space = F, deparseCtrl = 'all', max.deparse.length = 100000) # import the scripts containing custom functions. The function code will be printed as output for reproducibility
+```
+
+## import packages
+```{r, import packages, message=FALSE}
+list_of_packages <- c('knitr', 'dplyr', 'ggplot2', 'devtools', 'easypackages', 'tidyr', 'tibble', 'ggpubr','forcats', 'Rtsne', 'pheatmap', 'Hmisc', 'openxlsx')  # add more packages if required for your analysis
+
+list_of_packages <- unique(c(list_of_packages, get_required_packages()))
+list_of_packages <- list_of_packages[!(list_of_packages %in% installed.packages()[,'Package'])]
+if (length(list_of_packages)) install.packages(list_of_packages)
+
+easypackages::libraries('dplyr', 'ggplot2')
+```
+
+## set plot settings
+```{r, ggplot2 theme}
+ggplot2::theme_set(theme_minimal() 
+                   + theme(axis.text.x = element_text(angle = 45, hjust = 1), text = element_text(size=10))) # get a nicer ggplot theme
+```
+
+You can customize the color theme by chaning and adding colors to this list. The colors for each value should be provided as hex codes (e.g. see [here](https://www.w3schools.com/colors/colors_picker.asp)).
+```{r,  color customization}
+custom_cols <- list( # TODO set plot colors
+  genotype = c('471'     = '#4E84C4',
+               '471 742' = '#293352',
+               '430'     = '#D16103',
+               '448'     = '#FFDB6D',
+               '448 742' = '#C4961A',
+               'WT'      = '#52854C')
+)
+```
+
+In the Analysis section, the data is presented in one separate plot per experiment ID (or any other variable) and all plots are arranged in a grid. Set the the number of rows and columns within the grid of plots(```plot_grid_nrow``` * ```plot_grid_ncol``` >= # of different experiments IDs) depending on the number of settings.
+```{r,  plot grid configuration}
+nrow_plot_grid <- 4 # TODO set number of rows of the grid
+ncol_plot_grid <- 2 # TODO set number of columns of the grid
+```
+
+# Load data
+
+The ```get_file_list()``` function checks all directories in the ```raw_data_dir``` and all of it's subdirectories for files containing a CiliaQ output table. It function furthers allows to specify patterns that each file needs to additionally contain, e.g. for specific experimental IDs or dates.  
+You can also manually exclude or add files from the ```files_to_process``` list to ignore specific files for downstream analysis. For more advanced filtering you can use regex, for an introduction, see [here](https://cran.r-project.org/web/packages/stringr/vignettes/regular-expressions.html).  
+
+## create raw file list
+```{r, create and filter file list, class.output="scroll-200"}
+txt_pattern <- '.*_CQ.*s\\.txt$' # pattern to identify tabular txt files of CiliaQ
+
+exp_IDs_to_process <- c('e1990', 'e1995', 'e1999', 'e19104', 'e19112', 'e19113', 'e19130') # only files containing this IDs in the name will be included
+
+ignore_files <- c('example_filename_1.txt', 'example_filename_2.txt', '...') # list of files to ignore
+neg_pattern <- convert_vector_to_regex(c('20200220','20200221')) # exclude files from 2020220 and 20200221
+
+files_to_process <- get_file_list(raw_data_dir, txt_pattern, convert_vector_to_regex(exp_IDs_to_process))
+files_to_process <- files_to_process[!(files_to_process %in% ignore_files)] # manually exclude files
+files_to_process <- files_to_process[stringi::stri_detect_regex(files_to_process, '.*')] # match regrex
+files_to_process <- files_to_process[!stringi::stri_detect_regex(files_to_process, neg_pattern)] # exclude by regrex
+```
+
+## create annotation
+
+This chunk extracts the plain name of each image without and ending. This needs to be done to match the extracted annotation with the actual cilia from the tables ( __Note__: Filenames need to be unique!). It also extracts the experiment from the filepaths.  
+This example assumes that one experiment is located in one parent directory marked by a date and an experiment ID (starting with e and followed by at least 3 digits) in the name and that each filenames contains the imaging date as an 8 digit number starting with 20.   
+```{r, extract annotation from filenames}
+# TODO modifiy to your needs depending on your naming conventions
+files_annotation <- data.frame('filepath' = files_to_process) # extract filename from whole path
+files_annotation$filename <- stringi::stri_extract_first_regex(str = files_annotation$filepath, pattern = '/[^/]*s.txt') %>% 
+  gsub(pattern = '/', replacement = '') %>% 
+  gsub(pattern = '_CS_M_CQ.*s.txt', replacement = '') %>%  # delete pattern added during processing by (channel splitter), merger and CQ (and processing date).
+  gsub(pattern = '_M_CQ.*s.txt', replacement = '')      # TODO modify the pattern if you didn't use the 'normal' workflow 
+rownames(files_annotation) <- files_annotation$filename
+files_annotation$exp <- stringi::stri_extract_first_regex(str = files_annotation$filepath, pattern = '\\/20(\\d{6}) e(\\d{3,})([^/])*')  %>%
+   gsub(pattern = '/', replacement = '') # extract the experiment directory
+files_annotation$exp_ID <- stringi::stri_extract_first_regex(str = files_annotation$exp, pattern = 'e(\\d{3,})( [A-C])?') # extract the experiment ID
+files_annotation$imaging_date <- stringi::stri_extract_first_regex(str = rownames(files_annotation), pattern = '20(\\d{6})') # extract the imaging date
+```
+
+Now we're trying to retract the exact experimental conditions from the filenames. In this use-case we're assuming to have different genotypes and treatment vs controls as conditions. A combination of all different varibles is than stored in the column 'condition'.
+```{r, extract experimental conditions from filename}
+genotypes <- c(' WT ', ' NT ', ' 430 ', ' 471 742 ', ' 471 ', ' 448 742 ', ' 448 ') # TODO enter your genotypes
+treatments <- c(' L ', ' D ', ' 0 ', ' 1 23 ', ' 1_23 ', ' 23 1 ', ' 23_1 ') # TODO enter possible treatments
+
+files_annotation$genotype <- stringi::stri_extract_first_regex(str = rownames(files_annotation), pattern = convert_vector_to_regex(genotypes)) %>% 
+  gsub(pattern = '^ ', replacement = '') %>% # delete spaces before and after the strings
+  gsub(pattern = ' $', replacement = '') %>%  
+  forcats::fct_collapse(WT = c('WT', 'NT')) # you can merge two names (e.g. NT = non-transfected and WT) into one factor if you used different names for the same condition
+
+files_annotation$treatment <- stringi::stri_extract_first_regex(str = rownames(files_annotation), pattern = convert_vector_to_regex(treatments)) %>% 
+  gsub(pattern = '^ ', replacement = '') %>% # delete spaces before and after the strings
+  gsub(pattern = ' $', replacement = '') 
+
+files_annotation$condition <- paste(files_annotation$genotype, files_annotation$treatment, sep = "-") # TODO add additional condition variables if available
+```
+
+Verify if the retrieved annotation is correct and if all conditions and other varibles you want to exclude are covered. An Excel sheet containing the extracted annotation is saved at:  *```r filename_annotation```* 
+```{r, output annotation, class.output="scroll-400"}
+head(files_annotation) # check the annotation
+
+annotation_excel <- openxlsx::createWorkbook()
+sheet <- openxlsx::addWorksheet(annotation_excel, sheetName = 'annotation from filenames')
+openxlsx::writeDataTable(annotation_excel, sheet, files_annotation, withFilter = F)
+openxlsx::saveWorkbook(annotation_excel, file = filename_annotation, overwrite = T)
+```
+
+If you want to manually modify the annotation you can copy the content of the created .xlsx file (```r filename_annotation```) to the ```r file.path(analysis_dir, 'resources', 'manual_annotation_ciliaQ_analysis.csv')``` file and save it as .csv (this allows for efficient version control). Remember to keep it up to date as you add more files etc. You can also track the .csv file with git.
+If you do not need to manually modifiy the annotation just comment out or delete the following chunk to prevent errors.
+```{r, input manual annotation}
+# files_annotation <- read.csv2(file.path(analysis_dir, 'resources', 'manual_annotation_ciliaQ_analysis.csv'), na.strings = '') # comment if not used!!
+```
+
+
+## fetch data
+
+The data is collected in the master dataFrame ```all_data``` within the read_data_from_ciliaQ() function (checked for v0.0.10 of CiliaQ).
+__Note:__ the function only supports english number format, if you used the german format you need to previously substitute all the ',' by '.' (e.g. by re-running CiliaQ) or edit the function!
+Addionally, an exclude list is loaded, cilia matched by the filename und the ID in each image, and excluded from the analysis. You can track changes in the .csv file using git. 
+The data is annotated and stored in the ```all_data_anno``` dataFrame, and ready to be filtered as you need. The rows of the dataFrame are named after the unique cilia ID (a combination of filename and cilia ID inside each image from CiliaQ) and the dataFrame is ordered by this ID.   
+Use ```data_variable_cols``` to subset columns of ```àll_data_anno``` to input clustering, pca, etc. as it does not contain annotation besides the rownames representing the unique cilia ID.
+```{r, fetch data, warning=FALSE}
+exclude_list <- read.csv2(file.path(analysis_dir, 'resources', 'exclude_list_ciliaQ_analysis.csv'), na.strings = '') %>%
+  mutate(merged = paste(filename, cilia_ID_in_image, sep = ' - ')) 
+
+all_data <- read_data_from_ciliaQ(as.vector(files_annotation$filepath)) %>%  # unannotated dataframe
+  filter(!(cilia_ID_unique %in% exclude_list$merged)) %>%  # exclude cilia
+  mutate(cilia_length_um = cilia_length_um + 0.21) # add the size of 1 pixel to each length, to compensate for the settings in CiliaQs skeletonize function 
+
+all_data_anno <- merge(all_data, files_annotation, by = 'filename', all.x = T) %>% arrange(cilia_ID_unique) # annotated dataFrame
+rownames(all_data_anno) <- all_data_anno$cilia_ID_unique
+data_variable_cols <- colnames(as.matrix(all_data_anno))[4:50] # columns containing data (without annotation)
+
+
+anno <- select(all_data_anno, c('cilia_ID_unique', 'cilia_ID_in_image',colnames(files_annotation)[-1])) # annotation only - can be used if processing does not allow for annotation, so this can re-added via the add_annotation() function
+```
+
+# Quality Control
+
+## count cilia
+Check if all of your cilia were detected and if the annotation is right.
+```{r, count cilia,class.output="scroll-400"}
+n_cilia <- all_data_anno %>% 
+            group_by(exp_ID, condition) %>% 
+            tally() %>% 
+            tidyr::spread(condition, n) 
+
+sheet <- openxlsx::addWorksheet(annotation_excel, sheetName = 'Detected Cilia')
+openxlsx::writeDataTable(annotation_excel, sheet, n_cilia, withFilter=FALSE)
+openxlsx::saveWorkbook(annotation_excel, file = filename_annotation, overwrite = T)
+
+print(n_cilia)
+```
+
+## microscopy calibration
+
+First, let's have a look on the ciliary length, so e major error in calibration (e.g. factor 2) or problems with english/german number format might already become visible.  
+More examples of plotting length and volume as examples/blueprints for analyzing CiliaQ data in R can be found in the chapter 'Cilia length analysis'.
+```{r, calibration QC, fig.height=9, fig.width=8}
+plots_length_calib <- list() 
+plots_volume       <- list()
+
+for (id in unique(all_data_anno$exp_ID)){ # splitting up the data by experiment ID, also other variables would be possible
+  plots_length_calib[[id]] <- all_data_anno %>% 
+    filter(grepl(pattern = id, x = exp_ID)) %>% 
+    tibble::column_to_rownames(var = 'cilia_ID_unique') %>%   # re-define rownames to ensure the labels are still right!!
+    tidyr::drop_na(cilia_length_um) %>% 
+    ggplot(aes(x = condition, y = cilia_length_um)) + 
+      geom_boxplot() + 
+      theme(legend.position = 'None') +
+      ylim(c(0,12)) +
+      ggtitle(paste('exp', id)) +
+      labs(x = NULL)
+  plots_volume[[id]] <- all_data_anno %>% 
+    filter(grepl(pattern = id, x = exp_ID)) %>% 
+    tibble::column_to_rownames(var = 'cilia_ID_unique') %>%   # re-define rownames to ensure the labels are still right!!
+    tidyr::drop_na(volume_um) %>% 
+    ggplot(aes(x = condition, y = volume_um)) + 
+      geom_boxplot() + 
+      theme(legend.position = 'None') +
+      ylim(c(0,12)) + 
+      ggtitle(paste('exp', id)) +
+      labs(x = NULL)
+}
+
+ggpubr::ggarrange(plotlist = plots_length_calib, ncol = ncol_plot_grid, nrow = nrow_plot_grid) %>% 
+  ggpubr::annotate_figure(top = 'Ciliary length')
+ggpubr::ggarrange(plotlist = plots_volume, ncol = ncol_plot_grid, nrow = nrow_plot_grid) %>% 
+  ggpubr::annotate_figure(top = 'Ciliary volume')
+```
+
+
+## transfection control
+Assuming that transgenic cells are used and they are marked with the respective colors in channel A and B defined in CiliaQ, we can measure and quantify the expression of the constructs by plotting the intesity in channel A vs channel B. Hence, you can check if the expression can be observed as exspected.
+```{r, fig.height=8, fig.width=7}
+plots_transfection_ctr <- list() # contains the scatter plots for an quick overview
+
+for (id in unique(all_data_anno$exp_ID)){ # this merges experiments A and B assuming they are very similar
+  plots_transfection_ctr[[id]] <- all_data_anno %>% 
+    filter(grepl(pattern = id, x = exp_ID)) %>% 
+    tibble::column_to_rownames(var = 'cilia_ID_unique') %>%   # re-define rownames to ensure the labels are still right!!
+    correlation_plot(x = 'av_int_A', y = 'av_int_B', color = 'genotype', title = paste('exp', id)) +
+      scale_color_manual(values = custom_cols[['genotype']], name = 'genotype', drop = F) +
+      scale_x_log10() + 
+      scale_y_log10() 
+}
+
+ggpubr::ggarrange(plotlist = plots_transfection_ctr,ncol = ncol_plot_grid, nrow = nrow_plot_grid, legend = 'right', common.legend = T) %>% 
+  ggpubr::annotate_figure(top = 'Transfection control: Channel A vs channel B')
+```
+
+# Write output data
+
+After checking the quality of the data it can now be retrieved as .xlsx files so you can open, edit, and plot it using Excel or Prism.  
+
+## output all data
+
+This outputs all data as one table.
+```{r, write all cilia data}
+all_data_excel <- openxlsx::createWorkbook()
+sheet <- openxlsx::addWorksheet(all_data_excel, sheetName = 'All experiments')
+openxlsx::writeDataTable(all_data_excel, sheet, all_data_anno, withFilter = F)
+
+openxlsx::saveWorkbook(all_data_excel, file = filename_cilia_data, overwrite = T)
+```
+
+## output data by experiment
+
+This writes each experiment in a separate Excel sheet.
+```{r, write cilia data filtered by exp_ID}
+for (e in unique(files_annotation$exp_ID)){
+  sheet <- openxlsx::addWorksheet(all_data_excel, sheetName = e)
+  all_data_anno %>% 
+    filter(exp_ID == e) %>% 
+    openxlsx::writeDataTable(wb = all_data_excel, sheet = sheet, withFilter = F)
+}
+
+openxlsx::saveWorkbook(all_data_excel, file = filename_cilia_data, overwrite = T)
+```
+
+The output data is now stored in the file ```filename_cilia_data``` . As the date and time is unique you can also exactly match the output .xlsx to this report and, thus, track the exact origin of the data.
+
+# Example analysis
+
+This is just example code for analyzing the data using correlation analysis and dimension reduction and studying the length in dependency of genotype and treatment. Mabye you can re-use some of the code, if not, feel free to delete this in order to speed up the execution of the script.
+
+## Correlation analysis
+
+By calculating and spotting correlation between the different measurement parameters we might be able to already spot unexspected behaviour and can get an overview over the variance as well as dependencies within the data. This might be intersting in some cases, however, it takes a while to compute, so if you have big datasets you might want to skip this part by deleting or commenting out the code.
+```{r, multiple regression plot, fig.height=10, fig.width=12}
+variables_in_regre_plots <- c('volume_vox', 'n_surface_vox', 'shape_complex', 'sphere_radius_um','av_int_reconst',
+                              'max_int_reconst', 'av_int_reconst_upper_ten_perc',
+                              'tree_lenght_um', 'cilia_length_um', 'av_int_A', 'av_int_B',
+                              'orient_vect_x', 'orient_vect_y', 'orient_vect_z', 'cilia_bend', 'treatment')
+
+test <- all_data_anno %>% 
+  select(variables_in_regre_plots) %>% 
+  tidyr::drop_na() %>%
+  plot(col = alpha('black', 0.01), pch = 20)
+```
+
+
+The following chunks visualize the computed Pearson and Spearman (=rank) correlations between variables across cilia. You might need to subset the data into groups to spot interesting correlations.
+```{r, Pearson correlation, fig.height=7, fig.width=7}
+cor <- all_data_anno %>%
+  select(all_of(data_variable_cols)) %>% 
+  select(which( !(colnames(.) %in% c('max_span_um', 'coloc_vol_B_perc', 'max_span', 'n_found_skeletons')))) %>% 
+  as.matrix() %>% 
+  Hmisc::rcorr(type = 'pearson')
+
+pheatmap::pheatmap(cor$r, 
+                   main = 'Pearson correlation of all parameters in all samples',
+                   col <- colorRampPalette(c('blue',"white", 'red'))(1000),
+                   fontsize = 6
+)
+```
+
+
+```{r, Spearman correlation, fig.height=7, fig.width=7}
+cor <- all_data_anno %>%
+  select(all_of(data_variable_cols)) %>% 
+  select( which( !(colnames(.) %in% c('max_span_um', 'coloc_vol_B_perc', 'max_span', 'n_found_skeletons')))) %>% 
+  as.matrix() %>% 
+  Hmisc::rcorr(type = 'spearman')
+
+pheatmap::pheatmap(cor$r, 
+                   main = 'Spearman correlation of all parameters in all samples',
+                   col <- colorRampPalette(c('blue',"white", 'red'))(2000),
+                   fontsize = 6,
+                   breaks = seq(-1,1,0.001)
+)
+```
+
+
+## dimension reduction
+
+### PCA
+
+We can also perform a PCA on the master dataFrame in order to assess cross-experiment structures.    
+The results of the PCA are stored to a prcomp object and need to be retrieved from it.  
+First we define variables to be considered, as some variables are essantially duplicate as they appear e.g. as pixels and as metric units, others are very noisy.
+```{r, calc PCA}
+# define variables in PCA
+neglected_vars_pca <- c('max_span_um', 'coloc_vol_B_perc', 'max_span', 'n_found_skeletons')
+vars_in_pca <- data_variable_cols[!(data_variable_cols %in% neglected_vars_pca)]
+```
+
+
+#### PCA with all data
+
+```{r, calc PCA all data, warning = FALSE}
+# perform pca of all samples
+pca_all <- all_data_anno %>% 
+  select(all_of(vars_in_pca)) %>% 
+  tidyr::drop_na() %>%
+  prcomp()
+```
+
+
+```{r, list eigenvalues, warning=FALSE, fig.height=3}
+plot_pca_eigenvalues(pca_all)
+```
+
+This plot shows the relative variance explained by each PC.  
+
+Next we can have a look on how much each variable influences each PC. 
+```{r, print eigenvalues, class.output="scroll-400"}
+pca_all$rotation[, c(0:4)]
+```
+
+You can plot the PCA to detect outliers and also get a brief overview over the data. You might already be able to detect some clustering upon your experimental conditions.
+```{r, batch detection PCA}
+pcs <-  merge(all_data_anno, pca_all$x, by = 0)
+
+plot_batch <- pcs %>% 
+  ggplot(aes(x = PC1, y = PC2)) + 
+  geom_point(aes(color = exp_ID)) + 
+    ggtitle('PCA of all cilia') +
+    theme(axis.text.x = element_blank(),
+      axis.text.y = element_blank()) 
+plot_batch 
+```
+
+```{r, batch detection PCA split, fig.width=10, fig.height=6}
+plot_batch + facet_grid(genotype~condition) 
+```
+
+```{r, condition PCA, fig.width=8}
+plot_cond <- pcs %>% 
+  ggplot(aes(x = PC1, y = PC2)) + 
+  geom_point(aes(color = condition)) + 
+    ggtitle('PCA of all cilia') +
+    theme(axis.text.x = element_blank(),
+      axis.text.y = element_blank())
+plot_cond
+```
+
+#### PCA in subsets
+
+```{r, fig.height=8, fig.width=6}
+pcas <- list()  # contains the raw PCAs to investigate the precise params
+plots <- list() # contains the PCA plots for an quick overview
+
+tmp <- all_data_anno
+all_data_anno <- all_data_anno %>%  tidyr::drop_na()
+for (id in unique(all_data_anno$exp_ID)){ 
+
+# for (id in unique(all_data_anno$exp_ID)){ 
+
+  pcas[[id]] <- all_data_anno %>% 
+    filter(grepl(pattern = id, x = exp_ID)) %>% 
+    tibble::column_to_rownames(var = 'cilia_ID_unique') %>% 
+    select(all_of(vars_in_pca)) %>% 
+    tidyr::drop_na() %>%
+    prcomp()
+  
+  plots[[id]] <- merge(all_data_anno, pcas[[id]]$x, by = 0) %>% 
+    ggplot(aes(x = PC1, y = PC2)) + 
+    geom_point(aes(color = treatment)) + 
+    ggtitle(paste('PCA of exp', id)) +
+    theme(axis.text.x = element_blank(),
+      axis.text.y = element_blank())
+}
+
+ggpubr::ggarrange(plotlist = plots,ncol = ncol_plot_grid, nrow = nrow_plot_grid)
+
+all_data_anno <- tmp
+```
+
+### t-SNE
+
+t-SNE is another dimension-reducing method thought to be more powerful in high-variance data.  
+See [here](https://lvdmaaten.github.io/tsne/) for information about the t-SNE.
+```{r, t-SNE, fig.width=10, fig.height=6}
+set.seed(42)
+tsne_anno <- calculate_tSNE(df = all_data_anno, cols = data_variable_cols)
+
+tsne_anno %>% 
+  ggplot(aes(x = tSNE_1, y = tSNE_2)) + geom_point(aes(color = exp_ID)) # check for batch effects
+tsne_anno %>% 
+  ggplot(aes(x = tSNE_1, y = tSNE_2)) + geom_point(aes(color = exp_ID)) + facet_grid(genotype~condition)
+```
+
+
+## cilary length by condition
+
+This is an example on how to analyze the cilary length. You can easily assess other varibles by simpley exchanging the names.
+
+```{r, length distr overview, fig.width=8}
+length_distr_plot <- all_data_anno %>% 
+  ggplot(aes(x = condition, y = cilia_length_um)) +
+   geom_dotplot(binaxis = 'y',
+                binwidth = 0.05,
+                stackdir = 'center',
+                color = 'grey',
+                alpha = 0.4) +
+   labs(x = NULL) +
+   ggtitle(label = 'Ciliary length overview') +
+   stat_summary(fun.y = median, fun.ymin = median, fun.ymax = median,
+               geom = 'crossbar', width = 0.5, color = 'red')
+length_distr_plot
+```
+
+
+```{r, legth dist by experiment, fig.height=9, fig.width=8, message=FALSE, warning=FALSE}
+length_distr <- list()
+for (id in unique(all_data_anno$exp_ID)){ # this merges experiments A and B assuming they are very similar
+  length_distr[[id]] <- all_data_anno %>% 
+    filter(grepl(pattern = id, x = exp_ID)) %>% 
+    tibble::column_to_rownames(var = 'cilia_ID_unique') %>%   # re-define rownames to ensure the labels are still right!!
+    ggplot(aes(x = condition, y = cilia_length_um)) +
+      geom_dotplot(binaxis = 'y',
+                   binwidth = 0.05,
+                   stackdir = 'center',
+                   color = 'grey',
+                   alpha = 0.4) +
+     labs(x = NULL) +
+     ggtitle(paste('exp', id)) +
+     ylim(c(0,9)) +
+  stat_summary(fun.y = median, fun.ymin = median, fun.ymax = median,
+               geom = 'crossbar', width = 0.45, color = 'red')
+}
+ggpubr::ggarrange(plotlist = length_distr,ncol = ncol_plot_grid, nrow = nrow_plot_grid, legend = 'right', common.legend = T) %>% 
+  ggpubr::annotate_figure(top = 'Distribution of ciliary length by experiment')
+```
+
+
+## ciliary length vs expression correlation
+
+```{r, generate length vs expression plots}
+ch_A_vs_length <- list() # plots channel A vs the ciliary length
+ch_B_vs_length <- list() # plots channel B vs the ciliary length
+
+
+for (id in unique(all_data_anno$exp_ID)){ # this merges experiments A and B assuming they are very similar
+  ch_A_vs_length[[id]] <- all_data_anno %>% 
+    filter(grepl(pattern = id, x = exp_ID)) %>% 
+    tibble::column_to_rownames(var = 'cilia_ID_unique') %>%   # re-define rownames to ensure the labels are still right!!
+    correlation_plot(x = 'av_int_A', y = 'cilia_length_um', title = paste('exp', id), color = 'genotype') +
+      scale_color_manual(values = custom_cols[['genotype']], name = 'genotype', drop = F) +
+      scale_x_log10()
+  ch_B_vs_length[[id]] <- all_data_anno %>% 
+    filter(grepl(pattern = id, x = exp_ID)) %>% 
+    tibble::column_to_rownames(var = 'cilia_ID_unique') %>%   # re-define rownames to ensure the labels are still right!!
+    correlation_plot(x = 'av_int_B', y = 'cilia_length_um', title = paste('exp', id), color = 'genotype') +
+    scale_color_manual(values = custom_cols[['genotype']], name = 'genotype', drop = F) +
+      scale_x_log10()
+}
+```
+
+### ciliary length vs channel A
+```{r, ciliary length vs channel A, fig.height=9, fig.width=8, message=FALSE, warning=FALSE}
+ggpubr::ggarrange(plotlist = ch_A_vs_length,ncol = ncol_plot_grid, nrow = nrow_plot_grid, legend = 'right', common.legend = T) %>% 
+  ggpubr::annotate_figure(top = 'Length vs Expression in Channel A')
+```
+
+### ciliary length vs channel B
+```{r, ciliary length vs channel B, fig.height=9, fig.width=8, message=FALSE, warning=FALSE}
+ggpubr::ggarrange(plotlist = ch_B_vs_length,ncol = ncol_plot_grid, nrow = nrow_plot_grid, legend = 'right', common.legend = T) %>% 
+  ggpubr::annotate_figure(top = 'Length vs Expression in Channel B')
+```
+
+# Print session information and save image
+
+```{r, print session info}
+sessionInfo()
+
+save.image(filename_R_image)
+```
+The R image was saved as ```r filename_R_image``` . Import the image to R if you want to continue to analyze the data in sepate R script or session.
+

@@ -46,6 +46,3 @@ Ciliary Lenght Analysis *_files
 
 # Ouput folder
 output/
-
-# Exclude list
-resources/exclude_list*
