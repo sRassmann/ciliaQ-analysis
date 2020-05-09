@@ -1,6 +1,6 @@
 ---
-title: 'Join and analyze CiliaQ output data'
-subtitle : 'Template script'
+title: 'CiliaQ output joinR'
+subtitle : 'Join and analyze CiliaQ output data - template script'
 author:
   name: "[Sebastian Rassmann](https://github.com/sRassmann)"
   affiliation: "[Biophysical Imaging, III, University Bonn](http://www.iii.uni-bonn.de/en/wachten_lab/)"
@@ -16,7 +16,7 @@ knit: (
     rmarkdown::render( 
       input         = inputFile, 
       encoding      = encoding, 
-      output_file   = 'Ciliary Lenght Analysis 20200503.html') }) # TODO modify the report title each time you run the script to avoid overwriting
+      output_file   = 'CiliaQ output joinR 20200503.html') }) # TODO modify the report title each time you run the script to avoid overwriting
 ---
 
 This script has been developed in the department of [Biophysical Imaging](http://www.iii.uni-bonn.de/en/wachten_lab/) at the Institute of Innate Immunity, Bonn, Germany. For information on how to cite this work please contact [Sebastian Rassmann](mailto:s.rassmann@uni-bonn.de).
@@ -50,7 +50,7 @@ Main features include:
 * usage of <- instead of =
 * explicitly use namespaces, exception: common and unambigious packages such as ggplot2 
 * explict return statements
-* differing from the style codes, I prefer using 'quote' instead of "quote" and to add spaces to the '=' sign in functions calls
+* differing from the style codes, I prefer using 'quote' instead of "quote" and to add spaces to the '=' sign in function calls
 
 The [pipe operator](https://www.datacamp.com/community/tutorials/pipe-r-tutorial) ( %>% ) is just a shorthand notation for nested functions making the code more readable. E.g. a call of ```d <- c(b(a(df)), param = 'x')``` becomes ```d <- df %>% a() %>% b() %>% c(param = 'x')```.
 
