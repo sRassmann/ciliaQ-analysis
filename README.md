@@ -7,7 +7,7 @@ Downlaod the [repository](https://github.com/sRassmann/ciliaQ-analysis/archive/m
 __Note:__ You should clone the whole project structure, as it also contains the blueprints of additional documents (exclude lists, annotation lists) and custom functions imported into the actual script.
 
 ## Usage
-Before running the script only the paths, names, and experimental conditions need to be modified (marked with the tag '*TODO*'). Hence, you on't need (higher) skills in R programming. All the steps are explained in the markdown parts of the documents.
+Before running the script only the paths, names, and experimental conditions need to be modified (marked with the tag '*TODO*'). Hence, running the script does not require (higher) skills in R programming. All the steps are explained in the markdown parts of the documents.
 
 ## Citation
-This script has been developed in the department of [Biophysical Imaging](http://www.iii.uni-bonn.de/en/wachten_lab/) at the Institute of Innate Immunity, Bonn, Germany. For information on how to cite this work please contact [Sebastian Raﬂmann](mailto:s.rassmann@uni-bonn.de).
+This script has been developed in the department of [Biophysical Imaging](http://www.iii.uni-bonn.de/en/wachten_lab/) at the Institute of Innate Immunity, Bonn, Germany. For information on how to cite this work please contact [Sebastian Ra√ümann](mailto:s.rassmann@uni-bonn.de).
