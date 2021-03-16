@@ -10,4 +10,4 @@ __Note:__ You should clone the whole project structure, as it also contains the 
 Before running the script only the paths, names, and experimental conditions need to be modified (marked with the tag '*TODO*'). Hence, running the script does not require (higher) skills in R programming. All the steps are explained in the markdown parts of the documents.
 
 ## Citation
-This script has been developed in the department of [Biophysical Imaging](http://www.iii.uni-bonn.de/en/wachten_lab/) at the Institute of Innate Immunity, Bonn, Germany. For information on how to cite this work please contact [Sebastian Raßmann](mailto:s.rassmann@uni-bonn.de).
+Hansen JN, Rassmann S, Stüven B, Jurisch-Yaksi N, Wachten D. CiliaQ: a simple, open-source software for automated quantification of ciliary morphology and fluorescence in 2D, 3D, and 4D images. Eur Phys J E Soft Matter. 2021 Mar 8;44(2):18. doi: 10.1140/epje/s10189-021-00031-y. PMID: [33683488](https://pubmed.ncbi.nlm.nih.gov/33683488/).
